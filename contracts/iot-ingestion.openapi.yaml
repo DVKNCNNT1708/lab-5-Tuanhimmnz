@@ -2,6 +2,9 @@ openapi: 3.1.0
 info:
   title: FIT4110 Lab 05 - IoT Ingestion API
   version: 0.5.0
+  contact:
+    name: team-iot
+    url: https://github.com/DVKNCNNT1708/lab-5-Tuanhimmnz
   description: |
     Contract dùng cho Lab 05 Docker Compose readiness, kế thừa logic của Lab 03/04.
     Payload chính dùng các trường device_id, metric, value, unit và timestamp.
@@ -41,6 +44,33 @@ paths:
                     status: ok
                     service: iot-ingestion
                     version: 0.5.0
+
+  /readiness:
+    get:
+      tags: [system]
+      operationId: getReadiness
+      summary: Kiem tra readiness cua API, DB va AI service
+      description: Tra ve trang thai ket noi noi bo giua API voi PostgreSQL va AI service trong Docker Compose.
+      security: []
+      responses:
+        "200":
+          description: Trang thai readiness cua stack
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReadinessResponse"
+              examples:
+                ready:
+                  value:
+                    status: ready
+                    service: iot-ingestion
+                    version: 0.5.0
+                    db:
+                      ready: true
+                      detail: PostgreSQL is reachable
+                    ai:
+                      ready: true
+                      detail: AI service is reachable
 
   /readings:
     post:
@@ -190,6 +220,7 @@ paths:
     get:
       tags: [readings]
       operationId: getReadingById
+      description: Tra ve chi tiet mot ban ghi cam bien theo reading_id da tao tu endpoint POST /readings.
       summary: Lấy chi tiết một bản ghi cảm biến
       parameters:
         - name: reading_id
@@ -328,6 +359,36 @@ components:
         version:
           type: string
           example: 0.5.0
+
+    DependencyStatus:
+      type: object
+      required: [ready, detail]
+      properties:
+        ready:
+          type: boolean
+          example: true
+        detail:
+          type: string
+          example: PostgreSQL is reachable
+
+    ReadinessResponse:
+      type: object
+      required: [status, service, version, db, ai]
+      properties:
+        status:
+          type: string
+          enum: [ready, degraded]
+          example: ready
+        service:
+          type: string
+          example: iot-ingestion
+        version:
+          type: string
+          example: 0.5.0
+        db:
+          $ref: "#/components/schemas/DependencyStatus"
+        ai:
+          $ref: "#/components/schemas/DependencyStatus"
 
     ProblemDetails:
       type: object

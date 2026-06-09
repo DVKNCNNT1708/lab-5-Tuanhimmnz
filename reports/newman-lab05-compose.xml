@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites name="FIT4110 Lab05 Compose Verification" tests="13" time="0.146">
+  <testsuite name="01_Readiness / GET API health returns 200" id="12b8fe15-4d4a-42ff-b06e-223d1e5a6fa3" timestamp="2026-06-09T07:27:00.202Z" tests="2" failures="0" errors="0" time="0.021">
+    <testcase name="Status code is 200" time="0.021" classname="01ReadinessGetApiHealthReturns200"/>
+    <testcase name="API health status is ok" time="0.021" classname="01ReadinessGetApiHealthReturns200"/>
+  </testsuite>
+  <testsuite name="01_Readiness / GET API readiness verifies DB and AI" id="5652a74d-bc08-49a1-ae06-1174d2ea058e" timestamp="2026-06-09T07:27:00.202Z" tests="3" failures="0" errors="0" time="0.014">
+    <testcase name="Status code is 200" time="0.014" classname="01ReadinessGetApiReadinessVerifiesDbAndAi"/>
+    <testcase name="Readiness is ready" time="0.014" classname="01ReadinessGetApiReadinessVerifiesDbAndAi"/>
+    <testcase name="DB and AI dependencies are ready" time="0.014" classname="01ReadinessGetApiReadinessVerifiesDbAndAi"/>
+  </testsuite>
+  <testsuite name="01_Readiness / GET AI health returns 200" id="8b54e0f0-811e-43b8-a359-ae77b3b7bd5b" timestamp="2026-06-09T07:27:00.202Z" tests="2" failures="0" errors="0" time="0.007">
+    <testcase name="Status code is 200" time="0.007" classname="01ReadinessGetAiHealthReturns200"/>
+    <testcase name="AI health status is ok" time="0.007" classname="01ReadinessGetAiHealthReturns200"/>
+  </testsuite>
+  <testsuite name="01_Readiness / POST AI predict returns dummy inference" id="ac79fcfc-e972-4176-95ab-956d59f5369f" timestamp="2026-06-09T07:27:00.202Z" tests="2" failures="0" errors="0" time="0.004">
+    <testcase name="Status code is 200" time="0.004" classname="01ReadinessPostAiPredictReturnsDummyInference"/>
+    <testcase name="Prediction schema is valid" time="0.004" classname="01ReadinessPostAiPredictReturnsDummyInference"/>
+  </testsuite>
+  <testsuite name="02_Functional / POST valid temperature reading returns 201" id="c3f0a30d-c4a7-4e94-9e0e-2df20c0350b0" timestamp="2026-06-09T07:27:00.202Z" tests="2" failures="0" errors="0" time="0.027">
+    <testcase name="Status code is 201" time="0.027" classname="02FunctionalPostValidTemperatureReadingReturns201"/>
+    <testcase name="Response follows created-reading schema" time="0.027" classname="02FunctionalPostValidTemperatureReadingReturns201"/>
+  </testsuite>
+  <testsuite name="02_Functional / GET latest readings returns saved reading" id="f7350a22-e2bd-4784-a917-878120336353" timestamp="2026-06-09T07:27:00.202Z" tests="2" failures="0" errors="0" time="0.020">
+    <testcase name="Status code is 200" time="0.020" classname="02FunctionalGetLatestReadingsReturnsSavedReading"/>
+    <testcase name="Response has items array with saved reading" time="0.020" classname="02FunctionalGetLatestReadingsReturnsSavedReading"/>
+  </testsuite>
+  <testsuite name="02_Functional / GET reading by saved reading_id returns 200" id="f4bbdcb4-6968-4cf9-8d36-d30b957aface" timestamp="2026-06-09T07:27:00.202Z" tests="2" failures="0" errors="0" time="0.017">
+    <testcase name="Status code is 200" time="0.017" classname="02FunctionalGetReadingBySavedReadingIdReturns200"/>
+    <testcase name="Response reading_id matches saved variable" time="0.017" classname="02FunctionalGetReadingBySavedReadingIdReturns200"/>
+  </testsuite>
+  <testsuite name="03_Auth_Negative_Boundary / POST reading without token returns 401 ProblemDetails" id="f05b98c1-cb7b-4634-912d-3ce44dcda078" timestamp="2026-06-09T07:27:00.202Z" tests="2" failures="0" errors="0" time="0.003">
+    <testcase name="Missing token returns 401" time="0.003" classname="03AuthNegativeBoundaryPostReadingWithoutTokenReturns401ProblemDetails"/>
+    <testcase name="ProblemDetails schema is present" time="0.003" classname="03AuthNegativeBoundaryPostReadingWithoutTokenReturns401ProblemDetails"/>
+  </testsuite>
+  <testsuite name="03_Auth_Negative_Boundary / POST reading with wrong token returns 401 ProblemDetails" id="8f7423c8-9449-4066-b048-2207ba7bc875" timestamp="2026-06-09T07:27:00.202Z" tests="2" failures="0" errors="0" time="0.003">
+    <testcase name="Wrong token returns 401" time="0.003" classname="03AuthNegativeBoundaryPostReadingWithWrongTokenReturns401ProblemDetails"/>
+    <testcase name="ProblemDetails schema is present" time="0.003" classname="03AuthNegativeBoundaryPostReadingWithWrongTokenReturns401ProblemDetails"/>
+  </testsuite>
+  <testsuite name="03_Auth_Negative_Boundary / POST reading missing device_id returns 422 ProblemDetails" id="4ee277ed-e6e4-4f3a-9c4a-04b1fed2dcf3" timestamp="2026-06-09T07:27:00.202Z" tests="2" failures="0" errors="0" time="0.003">
+    <testcase name="Missing required field returns 422" time="0.003" classname="03AuthNegativeBoundaryPostReadingMissingDeviceIdReturns422ProblemDetails"/>
+    <testcase name="ProblemDetails schema is present" time="0.003" classname="03AuthNegativeBoundaryPostReadingMissingDeviceIdReturns422ProblemDetails"/>
+  </testsuite>
+  <testsuite name="03_Auth_Negative_Boundary / POST reading with value as string returns 422 ProblemDetails" id="e56139a7-a02e-4f4f-9436-15d1510c5c01" timestamp="2026-06-09T07:27:00.202Z" tests="2" failures="0" errors="0" time="0.002">
+    <testcase name="Wrong data type returns 422" time="0.002" classname="03AuthNegativeBoundaryPostReadingWithValueAsStringReturns422ProblemDetails"/>
+    <testcase name="ProblemDetails schema is present" time="0.002" classname="03AuthNegativeBoundaryPostReadingWithValueAsStringReturns422ProblemDetails"/>
+  </testsuite>
+  <testsuite name="03_Auth_Negative_Boundary / POST boundary temperature 80 is accepted with warning" id="b4274247-d69b-4f5f-aae5-aa0a8583807b" timestamp="2026-06-09T07:27:00.202Z" tests="2" failures="0" errors="0" time="0.022">
+    <testcase name="Boundary value 80 returns 201" time="0.022" classname="03AuthNegativeBoundaryPostBoundaryTemperature80IsAcceptedWithWarning"/>
+    <testcase name="High temperature response includes warning header" time="0.022" classname="03AuthNegativeBoundaryPostBoundaryTemperature80IsAcceptedWithWarning"/>
+  </testsuite>
+  <testsuite name="03_Auth_Negative_Boundary / POST boundary temperature 81 is rejected" id="014fb883-9b13-488e-9543-cd0ab20ecc36" timestamp="2026-06-09T07:27:00.202Z" tests="2" failures="0" errors="0" time="0.003">
+    <testcase name="Boundary value 81 returns 422" time="0.003" classname="03AuthNegativeBoundaryPostBoundaryTemperature81IsRejected"/>
+    <testcase name="ProblemDetails schema is present" time="0.003" classname="03AuthNegativeBoundaryPostBoundaryTemperature81IsRejected"/>
+  </testsuite>
+</testsuites>

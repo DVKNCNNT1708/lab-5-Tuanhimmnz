@@ -1,16 +1,16 @@
-# Readiness Checklist – Lab 05
+# Readiness Checklist - Lab 05
 
-Đây là danh sách kiểm tra (checklist) để đảm bảo stack Docker Compose của bạn đã sẵn sàng trước khi gửi bài. Hãy tick vào mỗi mục sau khi hoàn thành.
+- [x] **Database ready:** container `fit4110-db-lab05` chay va `pg_isready -U lab05 -d iotdb` tra ready.
+- [x] **AI service ready:** container `fit4110-ai-lab05` tra `200` cho `/health` va `/predict` hoat dong.
+- [x] **API ready:** container `fit4110-api-lab05` tra `200` cho `/health`, `/readiness` va tao/lai readings voi token hop le.
+- [x] **Environment variables:** runtime config tach qua `.env.example`; repo khong commit `.env` hay secret that.
+- [x] **Network and ports:** `team-internal` hoat dong; API goi noi bo `db:5432` va `ai-service:9000`; host map API `8000`, AI `9000`, DB `5432`.
+- [x] **Version and image tags:** image local dung tag `fit4110/iot-ingestion:lab05`, `fit4110/ai-service:lab05`, registry tag goi y `ghcr.io/dvkncnnt1708/team-iot:v0.1.0-team-iot`.
 
-- [ ] **Database ready:** container DB đã chạy và phản hồi `pg_isready`. Kiểm tra bằng `docker exec -it fit4110-db-lab05 pg_isready -U $POSTGRES_USER`.
-- [ ] **AI service ready:** container AI service trả về `200` cho endpoint `/health` và `/predict` hoạt động.
-- [ ] **API ready:** container API trả `200` cho `/health` và có thể tạo/lấy readings khi token hợp lệ.
-- [ ] **Environment variables:** `.env` đã được thiết lập đúng (APP_PORT, POSTGRES_USER, AUTH_TOKEN,…). Không sử dụng secret thật; lưu secret vào `.env` cục bộ, commit `.env.example`.
-- [ ] **Network & Ports:** mạng `team-internal` hoạt động; API gọi được AI bằng hostname `ai-service`; ports 8000 (API), 9000 (AI) và 5432 (DB) được map đúng.
-- [ ] **Image tags:** bạn đã build image với tag `v0.1.0-<team>` và push lên registry (ghcr.io hoặc Docker Hub). Xác nhận rằng tag xuất hiện trong registry.
+Evidence:
 
-Ghi chú thêm những vấn đề gặp phải hoặc điều chỉnh tại đây:
-
-```
-- Mô tả…
+```text
+reports/newman-lab05-compose.xml
+reports/newman-lab05-compose.html
+reports/lab05-compose-evidence.md
 ```

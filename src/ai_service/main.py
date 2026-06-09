@@ -1,31 +1,33 @@
-"""
-Simple AI service mock for Lab 05.
-
-This service exposes two endpoints:
-
-* `GET /health` – returns status, service name and version.
-* `POST /predict` – returns a dummy list of detected objects and confidences.
-
-You can replace this file with your actual inference code (e.g. YOLOv8 model).
-"""
+import os
+from typing import List, Optional
 
 from fastapi import FastAPI
 from pydantic import BaseModel
-from typing import List
 
-SERVICE_NAME = "ai-service"
-SERVICE_VERSION = "0.5.0"
+
+SERVICE_NAME = os.getenv("AI_SERVICE_NAME", "ai-service")
+SERVICE_VERSION = os.getenv("AI_SERVICE_VERSION", "0.5.0")
 
 app = FastAPI(
     title="FIT4110 Lab 05 - AI Service",
     version=SERVICE_VERSION,
-    description="Mock AI service used in Docker Compose stack.",
+    description="Mock AI service used in the Docker Compose readiness stack.",
 )
 
 
+class PredictionRequest(BaseModel):
+    device_id: Optional[str] = None
+    metric: Optional[str] = None
+    value: Optional[float] = None
+    unit: Optional[str] = None
+    timestamp: Optional[str] = None
+
+
 class Prediction(BaseModel):
+    status: str
     objects: List[str]
     confidence: List[float]
+    model_version: str
 
 
 @app.get("/health")
@@ -34,11 +36,10 @@ def health() -> dict:
 
 
 @app.post("/predict", response_model=Prediction)
-def predict() -> Prediction:
-    # This dummy implementation always returns two objects
-    return Prediction(objects=["person", "bicycle"], confidence=[0.98, 0.85])
-
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=9000)
+def predict(_: Optional[PredictionRequest] = None) -> Prediction:
+    return Prediction(
+        status="ok",
+        objects=["person", "bicycle"],
+        confidence=[0.98, 0.85],
+        model_version=SERVICE_VERSION,
+    )

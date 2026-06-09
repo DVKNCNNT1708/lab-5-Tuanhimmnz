@@ -1,0 +1,393 @@
+{
+  "info": {
+    "name": "FIT4110 Lab05 Compose Verification",
+    "description": "End-to-end Postman collection for the Lab 05 Docker Compose stack: API, PostgreSQL readiness and AI service.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "01_Readiness",
+      "item": [
+        {
+          "name": "GET API health returns 200",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/health"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('API health status is ok', function () { const json = pm.response.json(); pm.expect(json.status).to.eql('ok'); pm.expect(json.service).to.eql('iot-ingestion'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET API readiness verifies DB and AI",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/readiness"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Readiness is ready', function () { const json = pm.response.json(); pm.expect(json.status).to.eql('ready'); });",
+                  "pm.test('DB and AI dependencies are ready', function () { const json = pm.response.json(); pm.expect(json.db.ready).to.eql(true); pm.expect(json.ai.ready).to.eql(true); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET AI health returns 200",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{aiBaseUrl}}/health"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('AI health status is ok', function () { const json = pm.response.json(); pm.expect(json.status).to.eql('ok'); pm.expect(json.service).to.eql('ai-service'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST AI predict returns dummy inference",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{aiBaseUrl}}/predict",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"device_id\": \"ESP32-LAB-A01\",\n  \"metric\": \"temperature\",\n  \"value\": 31.5,\n  \"unit\": \"celsius\",\n  \"timestamp\": \"2026-05-13T08:30:00+07:00\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Prediction schema is valid', function () { const json = pm.response.json(); pm.expect(json.status).to.eql('ok'); pm.expect(json.objects).to.be.an('array'); pm.expect(json.confidence).to.be.an('array'); pm.expect(json).to.have.property('model_version'); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "02_Functional",
+      "item": [
+        {
+          "name": "POST valid temperature reading returns 201",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/readings",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"device_id\": \"ESP32-LAB-A01\",\n  \"metric\": \"temperature\",\n  \"value\": 31.5,\n  \"unit\": \"celsius\",\n  \"timestamp\": \"2026-05-13T08:30:00+07:00\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 201', function () { pm.response.to.have.status(201); });",
+                  "pm.test('Response follows created-reading schema', function () { const json = pm.response.json(); pm.expect(json.reading_id).to.match(/^R-[0-9]{8}-[0-9]{4}$/); pm.expect(json.accepted).to.eql(true); pm.expect(json.metric).to.eql('temperature'); });",
+                  "const created = pm.response.json();",
+                  "pm.environment.set('createdReadingId', created.reading_id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET latest readings returns saved reading",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/readings/latest?device_id=ESP32-LAB-A01&limit=5"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Response has items array with saved reading', function () { const json = pm.response.json(); const saved = pm.environment.get('createdReadingId'); pm.expect(json.items).to.be.an('array'); pm.expect(json.items.map(item => item.reading_id)).to.include(saved); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET reading by saved reading_id returns 200",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/readings/{{createdReadingId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Response reading_id matches saved variable', function () { const json = pm.response.json(); pm.expect(json.reading_id).to.eql(pm.environment.get('createdReadingId')); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "03_Auth_Negative_Boundary",
+      "item": [
+        {
+          "name": "POST reading without token returns 401 ProblemDetails",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/readings",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"device_id\": \"ESP32-LAB-A01\",\n  \"metric\": \"temperature\",\n  \"value\": 31.5,\n  \"unit\": \"celsius\",\n  \"timestamp\": \"2026-05-13T08:30:00+07:00\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Missing token returns 401', function () { pm.response.to.have.status(401); });",
+                  "pm.test('ProblemDetails schema is present', function () { const json = pm.response.json(); pm.expect(json).to.include.keys(['type', 'title', 'status', 'detail']); pm.expect(json.status).to.eql(401); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST reading with wrong token returns 401 ProblemDetails",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer wrong-token"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/readings",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"device_id\": \"ESP32-LAB-A01\",\n  \"metric\": \"temperature\",\n  \"value\": 31.5,\n  \"unit\": \"celsius\",\n  \"timestamp\": \"2026-05-13T08:30:00+07:00\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Wrong token returns 401', function () { pm.response.to.have.status(401); });",
+                  "pm.test('ProblemDetails schema is present', function () { const json = pm.response.json(); pm.expect(json).to.include.keys(['type', 'title', 'status', 'detail']); pm.expect(json.status).to.eql(401); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST reading missing device_id returns 422 ProblemDetails",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/readings",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"metric\": \"temperature\",\n  \"value\": 31.5,\n  \"unit\": \"celsius\",\n  \"timestamp\": \"2026-05-13T08:30:00+07:00\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Missing required field returns 422', function () { pm.response.to.have.status(422); });",
+                  "pm.test('ProblemDetails schema is present', function () { const json = pm.response.json(); pm.expect(json).to.include.keys(['type', 'title', 'status', 'detail']); pm.expect(json.status).to.eql(422); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST reading with value as string returns 422 ProblemDetails",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/readings",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"device_id\": \"ESP32-LAB-A01\",\n  \"metric\": \"temperature\",\n  \"value\": \"hot\",\n  \"unit\": \"celsius\",\n  \"timestamp\": \"2026-05-13T08:30:00+07:00\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Wrong data type returns 422', function () { pm.response.to.have.status(422); });",
+                  "pm.test('ProblemDetails schema is present', function () { const json = pm.response.json(); pm.expect(json).to.include.keys(['type', 'title', 'status', 'detail']); pm.expect(json.status).to.eql(422); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST boundary temperature 80 is accepted with warning",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/readings",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"device_id\": \"ESP32-LAB-A01\",\n  \"metric\": \"temperature\",\n  \"value\": 80,\n  \"unit\": \"celsius\",\n  \"timestamp\": \"2026-05-13T08:30:00+07:00\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Boundary value 80 returns 201', function () { pm.response.to.have.status(201); });",
+                  "pm.test('High temperature response includes warning header', function () { pm.expect(pm.response.headers.has('X-Warning')).to.eql(true); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST boundary temperature 81 is rejected",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/readings",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"device_id\": \"ESP32-LAB-A01\",\n  \"metric\": \"temperature\",\n  \"value\": 81,\n  \"unit\": \"celsius\",\n  \"timestamp\": \"2026-05-13T08:30:00+07:00\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Boundary value 81 returns 422', function () { pm.response.to.have.status(422); });",
+                  "pm.test('ProblemDetails schema is present', function () { const json = pm.response.json(); pm.expect(json).to.include.keys(['type', 'title', 'status', 'detail']); pm.expect(json.status).to.eql(422); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

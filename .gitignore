@@ -1,0 +1,14 @@
+node_modules/
+.venv/
+.env
+.env.*
+!.env.example
+__pycache__/
+*.pyc
+.pytest_cache/
+reports/*.xml
+reports/*.html
+reports/*.json
+!reports/.gitkeep
+!reports/newman-lab05-compose.xml
+!reports/newman-lab05-compose.html

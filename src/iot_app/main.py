@@ -1,25 +1,36 @@
 import os
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Dict, List, Optional
+from http import HTTPStatus
+from typing import Any, Dict, List, Optional
 
+import psycopg
+import requests
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request, Response, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from psycopg.rows import dict_row
 from pydantic import BaseModel, Field
 
-# Đọc biến môi trường với giá trị mặc định
+
 SERVICE_NAME = os.getenv("SERVICE_NAME", "iot-ingestion")
 SERVICE_VERSION = os.getenv("SERVICE_VERSION", "0.5.0")
 AUTH_TOKEN = os.getenv("AUTH_TOKEN", "local-dev-token")
+AI_SERVICE_URL = os.getenv("AI_SERVICE_URL", "http://ai-service:9000").rstrip("/")
+
+POSTGRES_HOST = os.getenv("POSTGRES_HOST", "db")
+POSTGRES_PORT = int(os.getenv("POSTGRES_PORT", "5432"))
+POSTGRES_USER = os.getenv("POSTGRES_USER", "lab05")
+POSTGRES_PASSWORD = os.getenv("POSTGRES_PASSWORD", "lab05pass")
+POSTGRES_DB = os.getenv("POSTGRES_DB", "iotdb")
 
 
 app = FastAPI(
     title="FIT4110 Lab 05 - IoT Ingestion Service",
     version=SERVICE_VERSION,
     description=(
-        "IoT Ingestion API chạy trong ngữ cảnh Docker Compose cho Lab 05. "
-        "Luồng logic được kế thừa từ Lab 04 và tiếp tục được dùng để kiểm thử end‑to‑end."
+        "IoT Ingestion API running in a Docker Compose stack with PostgreSQL and "
+        "a mock AI service for Lab 05 readiness verification."
     ),
 )
 
@@ -52,6 +63,19 @@ class HealthResponse(BaseModel):
     version: str
 
 
+class DependencyStatus(BaseModel):
+    ready: bool
+    detail: str
+
+
+class ReadinessResponse(BaseModel):
+    status: str
+    service: str
+    version: str
+    db: DependencyStatus
+    ai: DependencyStatus
+
+
 class SensorReadingCreate(BaseModel):
     device_id: str = Field(..., min_length=3, examples=["ESP32-LAB-A01"])
     metric: SensorMetric = Field(..., examples=["temperature"])
@@ -59,11 +83,11 @@ class SensorReadingCreate(BaseModel):
         ...,
         ge=-40,
         le=80,
-        description="Boundary range used in Lab 03 và Lab 04: -40 đến 80.",
+        description="Boundary range used in Lab 03, Lab 04 and Lab 05: -40 to 80.",
         examples=[31.5],
     )
     unit: Optional[SensorUnit] = Field(default=None, examples=["celsius"])
-    timestamp: str = Field(..., examples=["2026-05-13T08:30:00+07:00"])
+    timestamp: datetime = Field(..., examples=["2026-05-13T08:30:00+07:00"])
 
 
 class SensorReading(BaseModel):
@@ -84,7 +108,14 @@ class SensorReadingCreated(BaseModel):
     created_at: str
 
 
-READINGS: List[Dict] = []
+READINGS: List[Dict[str, Any]] = []
+
+
+def status_title(status_code: int) -> str:
+    try:
+        return HTTPStatus(status_code).phrase
+    except ValueError:
+        return "HTTP Error"
 
 
 def build_problem(
@@ -94,7 +125,7 @@ def build_problem(
     detail: str,
     instance: Optional[str] = None,
     problem_type: str = "about:blank",
-) -> Dict:
+) -> Dict[str, Any]:
     problem = {
         "type": problem_type,
         "title": title,
@@ -113,13 +144,13 @@ async def http_exception_handler(request: Request, exc: HTTPException) -> JSONRe
     else:
         problem = build_problem(
             status_code=exc.status_code,
-            title=status.HTTP_STATUS_CODES.get(exc.status_code, "HTTP Error"),
+            title=status_title(exc.status_code),
             detail=str(exc.detail),
             instance=str(request.url.path),
         )
 
     problem.setdefault("status", exc.status_code)
-    problem.setdefault("title", status.HTTP_STATUS_CODES.get(exc.status_code, "HTTP Error"))
+    problem.setdefault("title", status_title(exc.status_code))
     problem.setdefault("type", "about:blank")
     problem.setdefault("detail", "Request failed")
     problem.setdefault("instance", str(request.url.path))
@@ -179,6 +210,72 @@ def verify_bearer_token(authorization: Optional[str] = Header(default=None)) -> 
         )
 
 
+def db_connection():
+    return psycopg.connect(
+        host=POSTGRES_HOST,
+        port=POSTGRES_PORT,
+        user=POSTGRES_USER,
+        password=POSTGRES_PASSWORD,
+        dbname=POSTGRES_DB,
+        connect_timeout=3,
+        row_factory=dict_row,
+    )
+
+
+def ensure_schema() -> None:
+    with db_connection() as conn:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS sensor_readings (
+                reading_id TEXT PRIMARY KEY,
+                device_id TEXT NOT NULL,
+                metric TEXT NOT NULL,
+                value DOUBLE PRECISION NOT NULL,
+                unit TEXT,
+                timestamp TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                ai_summary TEXT
+            )
+            """
+        )
+
+
+def db_status() -> DependencyStatus:
+    try:
+        ensure_schema()
+        return DependencyStatus(ready=True, detail="PostgreSQL is reachable")
+    except Exception as exc:
+        return DependencyStatus(ready=False, detail=str(exc))
+
+
+def ai_status() -> DependencyStatus:
+    try:
+        response = requests.get(f"{AI_SERVICE_URL}/health", timeout=3)
+        response.raise_for_status()
+        return DependencyStatus(ready=True, detail="AI service is reachable")
+    except Exception as exc:
+        return DependencyStatus(ready=False, detail=str(exc))
+
+
+def call_ai_prediction(payload: SensorReadingCreate) -> Dict[str, Any]:
+    try:
+        response = requests.post(
+            f"{AI_SERVICE_URL}/predict",
+            json={
+                "device_id": payload.device_id,
+                "metric": payload.metric.value,
+                "value": payload.value,
+                "unit": payload.unit.value if payload.unit else None,
+                "timestamp": payload.timestamp.isoformat(),
+            },
+            timeout=3,
+        )
+        response.raise_for_status()
+        return response.json()
+    except Exception as exc:
+        return {"status": "unavailable", "detail": str(exc)}
+
+
 def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
@@ -186,6 +283,62 @@ def now_iso() -> str:
 def next_reading_id() -> str:
     today = datetime.now(timezone.utc).strftime("%Y%m%d")
     return f"R-{today}-{len(READINGS) + 1:04d}"
+
+
+def save_reading(item: Dict[str, Any], ai_summary: Dict[str, Any]) -> None:
+    ensure_schema()
+    with db_connection() as conn:
+        conn.execute(
+            """
+            INSERT INTO sensor_readings (
+                reading_id, device_id, metric, value, unit, timestamp, created_at, ai_summary
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (reading_id) DO NOTHING
+            """,
+            (
+                item["reading_id"],
+                item["device_id"],
+                item["metric"],
+                item["value"],
+                item["unit"],
+                item["timestamp"],
+                item["created_at"],
+                str(ai_summary),
+            ),
+        )
+
+
+def load_latest(device_id: Optional[str], limit: int) -> List[Dict[str, Any]]:
+    ensure_schema()
+    query = """
+        SELECT reading_id, device_id, metric, value, unit, timestamp, created_at
+        FROM sensor_readings
+    """
+    params: List[Any] = []
+    if device_id:
+        query += " WHERE device_id = %s"
+        params.append(device_id)
+    query += " ORDER BY created_at DESC LIMIT %s"
+    params.append(limit)
+
+    with db_connection() as conn:
+        rows = conn.execute(query, params).fetchall()
+
+    return list(reversed(rows))
+
+
+def load_reading(reading_id: str) -> Optional[Dict[str, Any]]:
+    ensure_schema()
+    with db_connection() as conn:
+        return conn.execute(
+            """
+            SELECT reading_id, device_id, metric, value, unit, timestamp, created_at
+            FROM sensor_readings
+            WHERE reading_id = %s
+            """,
+            (reading_id,),
+        ).fetchone()
 
 
 @app.get("/health", response_model=HealthResponse)
@@ -197,6 +350,19 @@ def health() -> HealthResponse:
     )
 
 
+@app.get("/readiness", response_model=ReadinessResponse)
+def readiness() -> ReadinessResponse:
+    db = db_status()
+    ai = ai_status()
+    return ReadinessResponse(
+        status="ready" if db.ready and ai.ready else "degraded",
+        service=SERVICE_NAME,
+        version=SERVICE_VERSION,
+        db=db,
+        ai=ai,
+    )
+
+
 @app.post(
     "/readings",
     response_model=SensorReadingCreated,
@@ -205,16 +371,16 @@ def health() -> HealthResponse:
     responses={
         401: {"model": ProblemDetails},
         422: {"model": ProblemDetails},
-        429: {"model": ProblemDetails},
+        503: {"model": ProblemDetails},
     },
 )
 def create_reading(payload: SensorReadingCreate, response: Response) -> SensorReadingCreated:
-    # Ví dụ logic cảnh báo: nếu nhiệt độ >= 70 thì thêm header cảnh báo
     if payload.metric == SensorMetric.temperature and payload.value >= 70:
         response.headers["X-Warning"] = "high-temperature"
 
     reading_id = next_reading_id()
     created_at = now_iso()
+    ai_summary = call_ai_prediction(payload)
 
     item = {
         "reading_id": reading_id,
@@ -222,10 +388,24 @@ def create_reading(payload: SensorReadingCreate, response: Response) -> SensorRe
         "metric": payload.metric.value,
         "value": payload.value,
         "unit": payload.unit.value if payload.unit else None,
-        "timestamp": payload.timestamp,
+        "timestamp": payload.timestamp.isoformat(),
         "created_at": created_at,
     }
     READINGS.append(item)
+
+    try:
+        save_reading(item, ai_summary)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=build_problem(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                title="Service Unavailable",
+                detail=f"Database is not ready: {exc}",
+                instance="/readings",
+                problem_type="https://smart-campus.local/problems/dependency-unavailable",
+            ),
+        ) from exc
 
     return SensorReadingCreated(
         reading_id=reading_id,
@@ -240,17 +420,27 @@ def create_reading(payload: SensorReadingCreate, response: Response) -> SensorRe
 def latest_readings(
     device_id: Optional[str] = Query(default=None),
     limit: int = Query(default=10, ge=1, le=100),
-) -> Dict[str, List[Dict]]:
-    items = READINGS
+) -> Dict[str, List[Dict[str, Any]]]:
+    try:
+        items = load_latest(device_id, limit)
+    except Exception:
+        items = READINGS
+        if device_id:
+            items = [item for item in items if item["device_id"] == device_id]
+        items = items[-limit:]
 
-    if device_id:
-        items = [item for item in items if item["device_id"] == device_id]
-
-    return {"items": items[-limit:]}
+    return {"items": items}
 
 
 @app.get("/readings/{reading_id}", dependencies=[Depends(verify_bearer_token)])
-def get_reading(reading_id: str) -> Dict:
+def get_reading(reading_id: str) -> Dict[str, Any]:
+    try:
+        item = load_reading(reading_id)
+        if item:
+            return item
+    except Exception:
+        pass
+
     for item in READINGS:
         if item["reading_id"] == reading_id:
             return item
